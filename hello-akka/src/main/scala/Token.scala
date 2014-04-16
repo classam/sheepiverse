@@ -40,7 +40,7 @@ object Token {
 trait TokenBase {
   def get(token_id:String):Option[Token]
   protected def map():Map[String, Token]
-  protected def tags():Map[String, List[Token]]
+  protected def tags():concurrent.TrieMap[String, List[Token]]
 
   def convertTokenIds(stack:List[String]):List[Token] = {
     val builder = List.newBuilder[Token]
@@ -62,28 +62,27 @@ trait TokenBase {
   }
 }
 
-class ImmutableTokenBase(val map:Map[String, Token], private val priv_tags:concurrent.TrieMap[String, List[Token]]) extends TokenBase{
-  def get(token_id:String):Option[Token] = {map.get(token_id)}
-
-  def tags():Map[String, List[Token]] = { return priv_tags.asInstanceOf[Map[String, List[Token]]]; }
+class ImmutableTokenBase(val map:Map[String, Token], val tags:concurrent.TrieMap[String, List[Token]]) extends TokenBase {
+  def get(token_id: String): Option[Token] = {
+    map.get(token_id)
+  }
 }
 
 class MutableTokenBase() extends TokenBase{
   private val priv_map = new mutable.HashMap[String, Token]()
-  private val priv_tags = new concurrent.TrieMap[String, List[Token]]
+  val tags = new concurrent.TrieMap[String, List[Token]]
 
-  def map:Map[String, Token] = {return priv_map.asInstanceOf[Map[String, Token]]}
-  def tags:Map[String, List[Token]] = {return return priv_tags.asInstanceOf[Map[String, List[Token]]];}
+  def map:Map[String, Token] = {return priv_map.toMap[String, Token]}
 
   def add(t:Token):Unit = {
     priv_map.update(t.id, t);
     t.extendedTags.foreach(s => {
-      var maybe = priv_tags.get(s)
+      var maybe = tags.get(s)
       if (maybe.isDefined) {
-        priv_tags.update(s, t :: maybe.get)
+        tags.update(s, t :: maybe.get)
       }
       else {
-        priv_tags.update(s, List[Token](t))
+        tags.update(s, List[Token](t))
       }
     });
   }
@@ -100,9 +99,9 @@ class MutableTokenBase() extends TokenBase{
     if( token.isDefined ){
       priv_map.remove(token_id);
       token.get.extendedTags.foreach(s => {
-        var maybe = priv_tags.get(s)
+        var maybe = tags.get(s)
         if (maybe.isDefined){
-          priv_tags.update(s, maybe.get.filterNot( item => item.id == token_id ))
+          tags.update(s, maybe.get.filterNot( item => item.id == token_id ))
         }
       });
     }
@@ -111,7 +110,7 @@ class MutableTokenBase() extends TokenBase{
   def get(token_id:String):Option[Token] = {priv_map.get(token_id)}
 
   def toImmutable:ImmutableTokenBase = {
-    return new ImmutableTokenBase(HashMap() ++ priv_map, priv_tags)
+    return new ImmutableTokenBase(HashMap() ++ priv_map, tags)
   }
 }
 
