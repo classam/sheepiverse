@@ -1,6 +1,4 @@
 
-
-
 abstract class StateUpdate
 case class MoveToken(val token_id:String, val x:Int, val y:Int) extends StateUpdate
 case class CreateToken(val token_name:String, val x:Int, val y:Int) extends StateUpdate
@@ -17,24 +15,28 @@ class Snapshot(
   val tokenBase:ImmutableTokenBase,
   val collisionGrid:ImmutableBitGrid){
 
+  def boolToSymbol(b:Boolean):String = {
+    if (b) "1" else "0"
+  }
+
   override def toString():String = {
     val symbolGrid = new Grid[String](width, height, ()=>"")
     terrainGrid.each( (x, y, terrain) => {
-      symbolGrid.set(x, y, terrain.symbol)
+      symbolGrid.set(x, y, " " + terrain.symbol)
     })
     tokenGrid.each( (x, y, stack) => {
       if( stack.length > 1){
-        symbolGrid.set(x, y, stack.length.toString)
+        symbolGrid.set(x, y, " " + stack.length.toString)
       }
       else if( stack.length == 1){
         val topStack = stack.last
         val maybe = tokenBase.get(topStack)
         if( maybe.isDefined){
-          symbolGrid.set(x, y, maybe.get.symbol)
+          symbolGrid.set(x, y, " " + maybe.get.symbol)
         }
       }
     })
-    return tokenBase.toString + "\n+++++++++\n" + symbolGrid.toString
+    return symbolGrid.toString
   }
 }
 
@@ -68,8 +70,7 @@ class StateGrid(val width: Int, val height:Int, private val tokenCreator:(String
             tokenGrid.set(x, y, token.id)
             tokenGrid.remove(old_x, old_y, token.id)
             collisionGrid.unset(old_x, old_y)
-            token.x = x
-            token.y = y
+            token.set(x, y)
             return true
           }
         }
@@ -106,6 +107,7 @@ class StateGrid(val width: Int, val height:Int, private val tokenCreator:(String
       val maybe = tokenBase.get(token_id)
       if(maybe.isDefined){
         var token = maybe.get
+        println("Removing token " + token.name + "-" + token.id)
         tokenGrid.remove(token.x, token.y, token.id)
         tokenBase.remove(token_id);
       }

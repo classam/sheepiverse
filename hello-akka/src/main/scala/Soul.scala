@@ -5,15 +5,6 @@ class Soul(val token:Token) extends Actor {
     case Think(snapshot) => {
       sender ! Response(token.id, token.tick(snapshot))
     }
-    /*
-    case Update(update) => {
-      token.update(update)
-    }
-    case ChangeXY(x, y) => {
-      token.x = x;
-      token.y = y;
-    }
-    */
     case Collision() => {
       token.collision()
     }

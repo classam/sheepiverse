@@ -8,15 +8,15 @@ case class Fence() extends Terrain{
 case class Dirt() extends Terrain {
 }
 
-class UnknownToken(x:Int, y:Int) extends Token(x,y){}
+class UnknownToken(sx:Int, sy:Int) extends Token(sx,sy){}
 
-class Grass(x:Int, y:Int) extends Token(x,y){
+class Grass(sx:Int, sy:Int) extends Token(sx,sy){
   override def name = "grass"
   override protected def tags = Vector("grass")
   override def symbol = "G"
 }
 
-class Sheep(x:Int, y:Int) extends Token(x,y){
+class Sheep(sx:Int, sy:Int) extends Token(sx,sy){
   val random = new scala.util.Random(System.nanoTime())
   var grass_eaten = 0;
   override val name = "sheep"
@@ -26,17 +26,16 @@ class Sheep(x:Int, y:Int) extends Token(x,y){
   override def hasState = true
   override def symbol = "S"
   override def collision():Unit = {
-    println("BAA!")
   }
   override def tick(state:Snapshot):List[StateUpdate] = {
-    println("baa")
     // If standing on grass, eat grass.
-    val grass_where_i_am_standing = state.tokenGrid.grid.get(x, y).filter((token_id) =>{ state.tokenBase.map(token_id).name == "grass"})
+    val tokens_where_i_am_standing = state.tokenBase.convertTokenIds(state.tokenGrid.getStack(this))
+    val grass_where_i_am_standing = tokens_where_i_am_standing.filter( (token) => token.name == "grass")
 
     if (grass_where_i_am_standing.length > 0){
       println("I am standing on " + grass_where_i_am_standing.length + " grasses")
       return List(
-        DestroyToken(grass_where_i_am_standing.head),
+        DestroyToken(grass_where_i_am_standing.head.id),
         Message("MONCH MONCH", x,y),
         UpdateToken(this.id, "INCREMENT_GRASS"))
     }
@@ -62,22 +61,23 @@ class Sheep(x:Int, y:Int) extends Token(x,y){
         return List(MoveToken(this.id, x, y+1))
       }
       else{
-        return List(MoveToken(this.id, x, y+0))
+        return List(MoveToken(this.id, x, y-1))
       }
     }
   }
   override def update(update_details:String):Unit = {
-    println("update")
     if(update_details == "INCREMENT_GRASS"){
-      grass_eaten += 2
+      grass_eaten = grass_eaten + 1
+      println("Incrementing grass: " + grass_eaten)
     }
     if(update_details == "DECREMENT_GRASS"){
-      grass_eaten -= 1
+      grass_eaten = grass_eaten - 1
+      println("Decrementing grass: " + grass_eaten)
     }
   }
 }
 
-class Poop(x:Int, y:Int) extends Token(x,y) {
+class Poop(sx:Int, sy:Int) extends Token(sx,sy) {
   var timer = 5;
   override def name = "poop"
   override protected def tags = Vector("poop")
@@ -90,16 +90,13 @@ class Poop(x:Int, y:Int) extends Token(x,y) {
       return List(UpdateToken(this.id, "DECREMENT_POOP_COUNTER"))
     }
     else{
-      return List(
-        DestroyToken(this.id)
-      )
-      /*
+
       return List(
         DestroyToken(this.id),
         Message("SPROUT!", x, y),
         CreateToken("grass", x, y)
       )
-      */
+
     }
 
   }

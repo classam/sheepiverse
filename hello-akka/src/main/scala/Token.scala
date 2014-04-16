@@ -3,7 +3,10 @@ import scala.collection.concurrent
 import scala.collection.immutable.{VectorBuilder, HashMap}
 
 abstract class Token(var x:Int, var y:Int, val id:String){
+
   def this(x:Int, y:Int) = this(x, y, java.util.UUID.randomUUID.toString())
+
+  def set(setX:Int, setY:Int):Unit = { x = setX; y = setY; }
 
   def name = "token"
   protected def tags:Vector[String] = Vector()
@@ -117,6 +120,10 @@ class MutableTokenBase() extends TokenBase{
 class ImmutableTokenIdGrid(val width:Int, val height:Int, val grid:ImmutableGrid[List[String]]) extends Gridlike[List[String]]{
   def get(x:Int, y:Int):List[String] = {
     return grid.get(x, y)
+  }
+
+  def getStack(token:Token):List[String] = {
+    return grid.get(token.x, token.y).filter( (token_id) => token_id != token.id )
   }
 }
 

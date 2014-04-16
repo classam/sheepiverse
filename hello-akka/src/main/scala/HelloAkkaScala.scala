@@ -10,31 +10,21 @@ case class Greeting(message: String)
 
 abstract class TimingEvent
 case class Tick() extends TimingEvent
-//case class Update(update:String) extends TimingEvent
-//case class ChangeXY(x:Int, y:Int) extends TimingEvent
 case class Collision() extends TimingEvent
 case class Think(state:Snapshot) extends TimingEvent
 case class Response(token_id:String, updates:List[StateUpdate]) extends TimingEvent
 
 class State extends Actor {
   val stateGrid = new StateGrid(15, 15, Game.createToken, Dirt())
-  stateGrid.stateUpdate(CreateToken("sheep", 5, 5))
-  stateGrid.stateUpdate(CreateToken("sheep", 6, 6))
-  stateGrid.stateUpdate(CreateToken("sheep", 7, 7))
-  stateGrid.stateUpdate(CreateToken("sheep", 8, 8))
-  stateGrid.stateUpdate(CreateToken("sheep", 9, 9))
-  stateGrid.stateUpdate(CreateToken("grass", 8, 8))
-  stateGrid.stateUpdate(CreateToken("grass", 4, 4))
-  stateGrid.stateUpdate(CreateToken("grass", 6, 5))
-  stateGrid.stateUpdate(CreateToken("grass", 7, 9))
-  stateGrid.stateUpdate(CreateToken("grass", 7, 3))
-  stateGrid.stateUpdate(CreateToken("grass", 9, 7))
-  stateGrid.stateUpdate(CreateToken("grass", 3, 3))
-  stateGrid.stateUpdate(CreateToken("grass", 4, 4))
-  stateGrid.stateUpdate(CreateToken("grass", 5, 5))
-  stateGrid.stateUpdate(CreateToken("grass", 6, 6))
-  stateGrid.stateUpdate(CreateToken("grass", 7, 7))
-  stateGrid.stateUpdate(CreateToken("grass", 8, 9))
+  for( i <- 0 until 15){
+    for( j <- 0 until 15){
+      if(i % 5 == 0 && j % 5 == 0){stateGrid.stateUpdate(CreateToken("sheep", i, j))}
+      if(i % 5 == 1 && j % 5 == 1){stateGrid.stateUpdate(CreateToken("grass", i, j))}
+    }
+  }
+
+  //stateGrid.stateUpdate(CreateToken("sheep", 5, 5))
+  //stateGrid.stateUpdate(CreateToken("grass", 5, 5))
 
   val map:mutable.HashMap[String, ActorRef] = new mutable.HashMap[String, ActorRef]()
   val hasResponded:mutable.HashMap[String, Boolean] = new mutable.HashMap[String, Boolean]()
@@ -61,15 +51,19 @@ class State extends Actor {
     }
   }
 
+  def sendMessageToToken(token_id:String, event:Any){
+    val maybe = map.get(token_id)
+    if(maybe.isDefined){
+      maybe.get ! event
+    }
+  }
+
   def successfulStateUpdate(stateUpdate:StateUpdate) = stateUpdate match {
     case CreateToken(token_name, x, y) => {
       actorUpdate()
     }
     case DestroyToken(token_id) => {
-      val maybe = map.get(token_id)
-      if(maybe.isDefined){
-        maybe.get ! PoisonPill
-      }
+      sendMessageToToken(token_id, PoisonPill)
       map.remove(token_id)
     }
     case _ => {}
@@ -77,10 +71,7 @@ class State extends Actor {
 
   def failedStateUpdate(stateUpdate:StateUpdate):Unit = stateUpdate match {
     case MoveToken(token_id, x, y) => {
-      var maybe = map.get(token_id)
-      if (maybe.isDefined) {
-        maybe.get ! Collision()
-      }
+      sendMessageToToken(token_id, Collision())
     }
     case _ => {}
   }
@@ -100,19 +91,21 @@ class State extends Actor {
     }
     case Tick() => {
       val t0 = System.nanoTime()
-      // send every actor who has responded to a tick... a tick
-      map.foreach{ case(id:String, actor:ActorRef) => {
-        var responded = hasResponded.get(id)
-        if(responded.isDefined && responded.get){
-          actor ! Think(snapshot)
-          hasResponded.update(id, false)
-        }
-        else{
-          println("I haven't heard back from " + id + " yet")
-        }
-      }}
       snapshot = stateGrid.toSnapshot()
       output ! Think(snapshot)
+      // send every actor who has responded to a tick... a tick
+      map.foreach {
+        case (id: String, actor: ActorRef) => {
+          var responded = hasResponded.get(id)
+          if (responded.isDefined && responded.get) {
+            actor ! Think(snapshot)
+            hasResponded.update(id, false)
+          }
+          else {
+            println("I haven't heard back from " + id + " yet")
+          }
+        }
+      }
       val t1 = System.nanoTime()
       println("Tick completed in: " + (t1 - t0)/1000000 + " ms")
     }
@@ -141,8 +134,8 @@ object HelloAkkaScala extends App {
   val inbox = Inbox.create(system)
 
   system.scheduler.schedule(
-    100.milliseconds,
-    100.milliseconds,
+    300.milliseconds,
+    300.milliseconds,
     state,
     Tick())(system.dispatcher)
 }
