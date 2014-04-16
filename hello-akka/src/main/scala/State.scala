@@ -41,7 +41,7 @@ class Snapshot(
 class StateGrid(val width: Int, val height:Int, private val tokenCreator:(String, Int, Int) => Token, private val baseTerrain:Terrain){
   val terrainGrid = new TerrainGrid(width, height, baseTerrain)
   val tokenGrid = new TokenIdGrid(width, height)
-  val tokenBase = new TokenBase()
+  val tokenBase = new MutableTokenBase()
   val collisionGrid = terrainGrid.getCollisions
 
   def toSnapshot():Snapshot = {

@@ -29,17 +29,6 @@ abstract class Token(var x:Int, var y:Int, val id:String){
   def tick(state:Snapshot):List[StateUpdate] = {require(isTickable); return List();}
   def update(updateDetails:String):Unit = {require(hasState)}
   def collision():Unit = {require(isCollidable && isTickable);}
-
-  def myStack(state:Snapshot):Vector[Token] = {
-    val vectorBuilder = Vector.newBuilder[Token]
-    state.tokenGrid.get(x, y).foreach((str) => {
-      val maybe = state.tokenBase.get(str)
-      if(maybe.isDefined){
-        vectorBuilder.+=(maybe.get)
-      }
-    })
-    return vectorBuilder.result()
-  }
 }
 
 object Token {
@@ -48,67 +37,81 @@ object Token {
   val stateful = "S"
 }
 
-class ImmutableTokenBase(val map:Map[String, Token], val tags:concurrent.TrieMap[String, List[Token]]){
-  def get(token_id:String):Option[Token] = {map.get(token_id)}
+trait TokenBase {
+  def get(token_id:String):Option[Token]
+  protected def map():Map[String, Token]
+  protected def tags():Map[String, List[Token]]
+
+  def convertTokenIds(stack:List[String]):List[Token] = {
+    val builder = List.newBuilder[Token]
+    stack.foreach((str) => {
+      val maybe = get(str)
+      if(maybe.isDefined){
+        builder.+=(maybe.get)
+      }
+    })
+    return builder.result()
+  }
 
   override def toString:String = {
-    val stringbuilder = new mutable.StringBuilder()
-    map.foreach{ case (key, value) => stringbuilder.append(key + " => " + value.name + " " + value.x + "," + value.y + "\n")}
-    stringbuilder.append("-----------------------\n")
-    tags.foreach{ case (key, value) => stringbuilder.append(key + "=>" + value.size.toString + "\n")}
-    return stringbuilder.result()
+    val builder = new mutable.StringBuilder()
+    map.foreach{ case (key, value) => builder.append(key + " => " + value.name + " " + value.x + "," + value.y + "\n")}
+    builder.append("-----------------------\n")
+    tags.foreach{ case (key, value) => builder.append(key + "=>" + value.size.toString + "\n")}
+    return builder.result()
   }
 }
 
-class TokenBase(){
-  private val data = new mutable.HashMap[String, Token]()
-  val tags = new concurrent.TrieMap[String, List[Token]]
+class ImmutableTokenBase(val map:Map[String, Token], private val priv_tags:concurrent.TrieMap[String, List[Token]]) extends TokenBase{
+  def get(token_id:String):Option[Token] = {map.get(token_id)}
+
+  def tags():Map[String, List[Token]] = { return priv_tags.asInstanceOf[Map[String, List[Token]]]; }
+}
+
+class MutableTokenBase() extends TokenBase{
+  private val priv_map = new mutable.HashMap[String, Token]()
+  private val priv_tags = new concurrent.TrieMap[String, List[Token]]
+
+  def map:Map[String, Token] = {return priv_map.asInstanceOf[Map[String, Token]]}
+  def tags:Map[String, List[Token]] = {return return priv_tags.asInstanceOf[Map[String, List[Token]]];}
 
   def add(t:Token):Unit = {
-    data.update(t.id, t);
+    priv_map.update(t.id, t);
     t.extendedTags.foreach(s => {
-      var maybe = tags.get(s)
+      var maybe = priv_tags.get(s)
       if (maybe.isDefined) {
-        tags.update(s, t :: maybe.get)
+        priv_tags.update(s, t :: maybe.get)
       }
       else {
-        tags.update(s, List[Token](t))
+        priv_tags.update(s, List[Token](t))
       }
     });
   }
 
   def update(token_id:String, update_details:String):Unit = {
-    val maybe = data.get(token_id)
+    val maybe = priv_map.get(token_id)
     if( maybe.isDefined ){
       maybe.get.update(update_details)
     }
   }
 
   def remove(token_id:String):Unit = {
-    var token = data.get(token_id);
+    var token = map.get(token_id);
     if( token.isDefined ){
-      data.remove(token_id);
+      priv_map.remove(token_id);
       token.get.extendedTags.foreach(s => {
-        var maybe = tags.get(s)
+        var maybe = priv_tags.get(s)
         if (maybe.isDefined){
-          tags.update(s, maybe.get.filterNot( item => item.id == token_id ))
+          priv_tags.update(s, maybe.get.filterNot( item => item.id == token_id ))
         }
       });
     }
   }
 
-  def get(token_id:String):Option[Token] = {data.get(token_id)}
+  def get(token_id:String):Option[Token] = {priv_map.get(token_id)}
 
   def toImmutable:ImmutableTokenBase = {
-    return new ImmutableTokenBase(HashMap() ++ data, tags)
-  }
-
-  override def toString:String = {
-    val stringbuilder = new mutable.StringBuilder()
-    data.foreach{ case (key, value) => stringbuilder.append(key + " => " + value.name + " " + value.x + "," + value.y + "\n")}
-    stringbuilder.append("-----------------------\n")
-    tags.foreach{ case (key, value) => stringbuilder.append(key + "=>" + value.size.toString + "\n")}
-    return stringbuilder.result()
+    return new ImmutableTokenBase(HashMap() ++ priv_map, priv_tags)
   }
 }
 
@@ -123,6 +126,10 @@ class TokenIdGrid(val width:Int, val height:Int) extends Gridlike[List[String]] 
 
   def get(x:Int, y:Int):List[String] = {
     return data.get(x, y)
+  }
+
+  def getStack(token:Token):List[String] = {
+    return data.get(token.x, token.y).filter( (token_id) => token_id != token.id )
   }
 
   def set(x:Int, y:Int, token_id:String):Unit = {
